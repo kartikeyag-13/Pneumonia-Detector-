@@ -1,0 +1,27 @@
+# Web framework
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+
+# Validation / settings
+pydantic==2.13.4
+pydantic-settings==2.7.1
+email-validator==2.2.0
+python-multipart==0.0.32
+
+# Database
+SQLAlchemy==2.0.37
+alembic==1.14.1
+psycopg2-binary==2.9.10
+
+# Config loading
+python-dotenv==1.0.1
+
+# Authentication
+bcrypt==4.2.1
+PyJWT==2.13.0
+
+# Image handling
+pillow==12.3.0
+
+# Supabase Storage (private bucket)
+supabase==2.31.0
