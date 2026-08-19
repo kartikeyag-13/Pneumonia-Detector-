@@ -1,7 +1,7 @@
 import uuid
 from collections.abc import Generator
 
-import jwt
+from jose import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
@@ -50,7 +50,7 @@ def get_current_user(
             detail="Token has expired",
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
-    except jwt.InvalidTokenError as exc:
+    except jwt.JWTError as exc:
         raise unauthorized from exc
 
     sub = payload.get("sub")

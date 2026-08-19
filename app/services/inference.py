@@ -1,13 +1,9 @@
 """
 Inference service: the ONLY place in the application that performs ML
-prediction. The routers, storage layer, and schemas must not depend on
-any model-specific detail (architecture, weights, preprocessing, etc.).
+prediction. The routers, storage layer, and schemas do not depend on any
+model-specific detail (architecture, weights, preprocessing, etc.).
 
-This module is the single seam that the ML teammate will replace once the
-final model file, preprocessing requirements, input dimensions, and class
-mapping are provided.
-
-The full pipeline (once the model is integrated) will be:
+The pipeline is:
 
     private Supabase image
         ↓            (download bytes via app.services.storage.download_image)
@@ -16,67 +12,78 @@ The full pipeline (once the model is integrated) will be:
     PIL Image
         ↓            (convert to RGB)
     RGB
-        ↓            (ML preprocessing: resize / normalize — TBD)
+        ↓            (ML preprocessing: resize to 224x224 + ImageNet normalize)
     ML preprocessing
-        ↓            (build input tensor — TBD)
+        ↓            (build input tensor)
     PyTorch tensor
-        ↓            (run the CNN/model — TBD)
-    CNN/model
+        ↓            (run the CNN — see app.services.model)
+    CNN
         ↓
-    numeric class
+    numeric class + softmax confidence
         ↓            (map via PREDICTION_LABELS)
     prediction label
 
-None of the steps below the Pillow stage are implemented yet.
+The preprocessing and class mapping match the training script (cnn.py):
+the Kaggle chest X-ray dataset is loaded with ``ImageFolder``, whose
+classes are alphabetical, so 0 = NORMAL and 1 = PNEUMONIA.
 """
 
+import logging
+
+import torch
 from PIL import Image as PILImage
+from torchvision import transforms
+
+from app.services.model import MODEL_VERSION, load_model
+
+logger = logging.getLogger(__name__)
 
 
-# Placeholder class mapping.
-#
-# The ML teammate may eventually provide a model that returns numeric
-# classes such as 1, 2, 3, 4. Their meaning is NOT known yet, so the
-# labels are left as "TODO" and must NOT be assumed.
+class InferenceNotImplemented(Exception):
+    """Raised when the inference pipeline cannot run (e.g. model weights missing)."""
+
+# Class order matches datasets.ImageFolder over the Kaggle chest_xray
+# dataset (alphabetical): 0 = NORMAL, 1 = PNEUMONIA.
 PREDICTION_LABELS: dict[int, str] = {
-    1: "TODO",
-    2: "TODO",
-    3: "TODO",
-    4: "TODO",
+    0: "NORMAL",
+    1: "PNEUMONIA",
 }
 
+# Preprocessing identical to the validation/test transform used in cnn.py.
+_TRANSFORM = transforms.Compose(
+    [
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ]
+)
 
-class InferenceNotImplemented(NotImplementedError):
-    """
-    Raised when the ML model has not been integrated yet. The endpoint
-    translates this into an HTTP 501 response.
-    """
 
-
-def predict_image(image: PILImage.Image) -> int:
+def predict_image(image: PILImage.Image) -> tuple[int, float]:
     """
-    Run the ML pipeline on a single Pillow image and return the predicted
-    numeric class (an integer such as 1, 2, 3, 4).
+    Run the ML pipeline on a single Pillow image.
 
-    TODO(model integration) — replace this placeholder body:
-    * Convert ``image`` to RGB.
-    * Apply the ML preprocessing steps (input dimensions, normalization
-      values) defined by the ML teammate.
-    * Build the input tensor.
-    * Load the model weights (path / loading mechanism defined by the ML
-      teammate — not a .pkl assumption).
-    * Run the forward pass and return the predicted class.
+    Returns a ``(prediction_code, confidence)`` tuple where
+    ``prediction_code`` is 0 (NORMAL) or 1 (PNEUMONIA) and ``confidence``
+    is the softmax probability of the predicted class.
     """
-    raise InferenceNotImplemented(
-        "ML model inference is not implemented yet; "
-        "the inference service will return a numeric class once the "
-        "model is integrated."
-    )
+    model = load_model()
+    device = next(model.parameters()).device
+
+    rgb = image.convert("RGB")
+    tensor = _TRANSFORM(rgb).unsqueeze(0).to(device)
+
+    with torch.no_grad():
+        logits = model(tensor)
+        probs = torch.softmax(logits, dim=1)
+
+    confidence, prediction_code = probs.max(dim=1)
+    return int(prediction_code.item()), float(confidence.item())
 
 
 def label_for_class(code: int) -> str:
     """
     Map a numeric class code to its human-readable label using the
-    PREDICTION_LABELS placeholder mapping.
+    PREDICTION_LABELS mapping.
     """
     return PREDICTION_LABELS[code]

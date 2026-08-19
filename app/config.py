@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     DATABASE_PORT: int = 5432
     DATABASE_NAME: str
 
-    # JWT (reserved for future auth implementation)
+    # JWT auth
     JWT_SECRET_KEY: str
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 120
@@ -25,6 +25,9 @@ class Settings(BaseSettings):
 
     # Image upload limits
     MAX_UPLOAD_SIZE_BYTES: int = 10 * 1024 * 1024  # 10 MB
+
+    # ML model path (relative to project root)
+    MODEL_PATH: str = "model/pneumonia_detection_model.pth"
 
     model_config = SettingsConfigDict(
         env_file=".env",

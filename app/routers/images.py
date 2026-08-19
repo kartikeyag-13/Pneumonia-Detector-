@@ -176,8 +176,8 @@ def upload(
             except StorageError:
                 pass
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to save image metadata",
-        )
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=f"Failed to save image metadata: {str(exc)}",
+    ) from exc
 
     return record

@@ -1,6 +1,6 @@
 """initial schema: users, images, predictions
 
-Revision ID: 8fe6052182d6
+Revision ID: 8fe6052alembic upgrade head182d6
 Revises: 
 Create Date: 2026-08-16 11:13:43.952419
 
@@ -38,7 +38,9 @@ def upgrade() -> None:
     sa.Column('original_filename', sa.String(length=255), nullable=False),
     sa.Column('content_type', sa.String(length=100), nullable=False),
     sa.Column('file_size', sa.BigInteger(), nullable=False),
+    sa.Column('status',sa.String(length=20),server_default='active',nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )

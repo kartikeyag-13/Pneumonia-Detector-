@@ -17,6 +17,5 @@ class ImageResponse(BaseModel):
     storage_path: str
     original_filename: str
     content_type: str
-    file_size: int
-    status: str
+    file_size: int  
     created_at: datetime

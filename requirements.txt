@@ -17,11 +17,16 @@ psycopg2-binary==2.9.10
 python-dotenv==1.0.1
 
 # Authentication
-bcrypt==4.2.1
-PyJWT==2.13.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+python-jose[cryptography]==3.3.0
 
 # Image handling
 pillow==12.3.0
+
+# ML inference (PyTorch CPU)
+torch>=2.0.0
+torchvision>=0.15.0
 
 # Supabase Storage (private bucket)
 supabase==2.31.0

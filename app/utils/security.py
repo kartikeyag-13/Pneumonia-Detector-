@@ -1,27 +1,27 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-import bcrypt
-import jwt
+from jose import jwt
+from passlib.context import CryptContext
 
 from app.config import settings
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def hash_password(password: str) -> str:
     """
-    Hash a plaintext password with bcrypt. The returned value includes
-    the bcrypt salt and is safe to store in the database.
+    Hash a plaintext password with bcrypt via passlib. The returned value
+    includes the bcrypt salt and is safe to store in the database.
     """
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    return pwd_context.hash(password)
 
 
 def verify_password(plain_password: str, password_hash: str) -> bool:
     """
     Compare a plaintext password against a stored bcrypt hash.
     """
-    return bcrypt.checkpw(
-        plain_password.encode("utf-8"), password_hash.encode("utf-8")
-    )
+    return pwd_context.verify(plain_password, password_hash)
 
 
 def create_access_token(subject: str, expires_minutes: int | None = None) -> str:
@@ -39,7 +39,7 @@ def create_access_token(subject: str, expires_minutes: int | None = None) -> str
 
 def decode_access_token(token: str) -> dict[str, Any]:
     """
-    Decode and validate a JWT access token. Raises jwt.PyJWTError on
+    Decode and validate a JWT access token. Raises jose.exceptions.JWTError on
     invalid/expired tokens.
     """
     return jwt.decode(

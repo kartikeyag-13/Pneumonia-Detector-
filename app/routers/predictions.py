@@ -4,6 +4,7 @@ from io import BytesIO
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from PIL import Image as PILImage
 from PIL import UnidentifiedImageError
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_user, get_db
@@ -16,6 +17,7 @@ from app.services.inference import (
     label_for_class,
     predict_image,
 )
+from app.services.model import MODEL_VERSION
 from app.services.storage import StorageError, delete_image, download_image
 
 router = APIRouter(prefix="/predict", tags=["predictions"])
@@ -39,9 +41,6 @@ def predict(
     image is marked as processed, and its physical object is deleted from
     storage. The image metadata row and the prediction history are kept in
     PostgreSQL.
-
-    Note: the ML model is not integrated yet, so this endpoint returns
-    HTTP 501 until the inference service is implemented.
     """
     image = (
         db.query(Image)
@@ -76,12 +75,39 @@ def predict(
             detail="Stored image could not be read as a valid image",
         )
 
+    # Atomically claim the active image for this inference so two concurrent
+    # predict requests cannot both process the same image.
+    claim = db.execute(
+        update(Image)
+        .where(Image.id == image.id, Image.status == STATUS_ACTIVE)
+        .values(status=STATUS_PROCESSED)
+    )
+    if claim.rowcount == 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Image is not active; it has already been processed",
+        )
+
     try:
-        prediction_code = predict_image(pil_image)
+        prediction_code, confidence = predict_image(pil_image)
+    except FileNotFoundError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"ML model not available: {exc}",
+        ) from exc
     except InferenceNotImplemented as exc:
+        # Revert the claim so the image stays active for a later retry.
+        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
             detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Inference failed",
         ) from exc
 
     record = Prediction(
@@ -89,8 +115,9 @@ def predict(
         user_id=current_user.id,
         prediction_code=prediction_code,
         prediction_label=label_for_class(prediction_code),
+        confidence=confidence,
+        model_version=MODEL_VERSION,
     )
-    image.status = STATUS_PROCESSED
     db.add(record)
     db.commit()
     db.refresh(record)
